@@ -132,7 +132,24 @@ function setupStockSearch() {
         
         // Call the API to get stock information
         fetch(`/api/stock/search?query=${encodeURIComponent(symbol)}&exchange=${exchange}`)
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    if (response.status === 500) {
+                        throw new Error('Server error. Please try again later.');
+                    } else if (response.status === 404) {
+                        throw new Error(`Stock symbol ${symbol} not found on ${exchange}.`);
+                    } else {
+                        throw new Error(`Server responded with status: ${response.status}`);
+                    }
+                }
+                
+                const contentType = response.headers.get('content-type');
+                if (!contentType || !contentType.includes('application/json')) {
+                    throw new Error('Server returned non-JSON response');
+                }
+                
+                return response.json();
+            })
             .then(data => {
                 // Reset button state
                 searchBtn.disabled = false;
@@ -154,7 +171,7 @@ function setupStockSearch() {
                 searchBtn.disabled = false;
                 searchBtn.textContent = 'Search';
                 console.error('Error searching for stock:', error);
-                showStockInfoAlert('Error searching for stock. Please check the symbol and try again.', 'danger');
+                showStockInfoAlert(`Error: ${error.message}`, 'danger');
             });
     }
     
@@ -177,11 +194,28 @@ function setupStockSearch() {
 function refreshStockPrice(userId, stockId, symbol, exchange) {
     // Call the API to get updated stock price
     fetch(`/api/stock/search?query=${encodeURIComponent(symbol)}&exchange=${exchange}`)
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                if (response.status === 500) {
+                    throw new Error('Server error. Please try again later.');
+                } else if (response.status === 404) {
+                    throw new Error(`Stock symbol ${symbol} not found on ${exchange}.`);
+                } else {
+                    throw new Error(`Server responded with status: ${response.status}`);
+                }
+            }
+            
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                throw new Error('Server returned non-JSON response');
+            }
+            
+            return response.json();
+        })
         .then(data => {
             if (data.error) {
                 console.error('Error refreshing stock price:', data.error);
-                alert('Error refreshing stock price. Please try again.');
+                alert(`Error refreshing stock price: ${data.error}`);
                 return;
             }
             
@@ -196,12 +230,12 @@ function refreshStockPrice(userId, stockId, symbol, exchange) {
             })
             .catch((error) => {
                 console.error("Error updating stock price:", error);
-                alert('Error updating stock price. Please try again.');
+                alert('Error updating stock price in database. Please try again.');
             });
         })
         .catch(error => {
             console.error('Error refreshing stock price:', error);
-            alert('Error refreshing stock price. Please try again.');
+            alert(`Error refreshing stock price: ${error.message}`);
         });
 }
 

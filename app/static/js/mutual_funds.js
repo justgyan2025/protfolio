@@ -131,7 +131,24 @@ function setupFundSearch() {
         
         // Call the API to get mutual fund information
         fetch(`/api/mutual-fund/search?scheme_code=${encodeURIComponent(schemeCode)}`)
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    if (response.status === 500) {
+                        throw new Error('Server error. Please try again later.');
+                    } else if (response.status === 404) {
+                        throw new Error(`Mutual fund with scheme code ${schemeCode} not found.`);
+                    } else {
+                        throw new Error(`Server responded with status: ${response.status}`);
+                    }
+                }
+                
+                const contentType = response.headers.get('content-type');
+                if (!contentType || !contentType.includes('application/json')) {
+                    throw new Error('Server returned non-JSON response');
+                }
+                
+                return response.json();
+            })
             .then(data => {
                 // Reset button state
                 searchBtn.disabled = false;
@@ -155,7 +172,7 @@ function setupFundSearch() {
                 searchBtn.disabled = false;
                 searchBtn.textContent = 'Search';
                 console.error('Error searching for mutual fund:', error);
-                showFundInfoAlert('Error searching for mutual fund. Please check the scheme code and try again.', 'danger');
+                showFundInfoAlert(`Error: ${error.message}`, 'danger');
             });
     }
     
@@ -178,11 +195,28 @@ function setupFundSearch() {
 function refreshFundNAV(userId, fundId, schemeCode) {
     // Call the API to get updated NAV
     fetch(`/api/mutual-fund/search?scheme_code=${encodeURIComponent(schemeCode)}`)
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                if (response.status === 500) {
+                    throw new Error('Server error. Please try again later.');
+                } else if (response.status === 404) {
+                    throw new Error(`Mutual fund with scheme code ${schemeCode} not found.`);
+                } else {
+                    throw new Error(`Server responded with status: ${response.status}`);
+                }
+            }
+            
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                throw new Error('Server returned non-JSON response');
+            }
+            
+            return response.json();
+        })
         .then(data => {
             if (data.error) {
                 console.error('Error refreshing NAV:', data.error);
-                alert('Error refreshing NAV. Please try again.');
+                alert(`Error refreshing NAV: ${data.error}`);
                 return;
             }
             
@@ -198,12 +232,12 @@ function refreshFundNAV(userId, fundId, schemeCode) {
             })
             .catch((error) => {
                 console.error("Error updating NAV:", error);
-                alert('Error updating NAV. Please try again.');
+                alert('Error updating NAV in database. Please try again.');
             });
         })
         .catch(error => {
             console.error('Error refreshing NAV:', error);
-            alert('Error refreshing NAV. Please try again.');
+            alert(`Error refreshing NAV: ${error.message}`);
         });
 }
 

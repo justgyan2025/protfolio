@@ -45,6 +45,10 @@ def search_stock():
         ticker = yf.Ticker(ticker_symbol)
         info = ticker.info
         
+        # Check if we got valid info back
+        if not info or len(info) == 0:
+            return jsonify({'error': f'No data found for symbol {ticker_symbol}'}), 404
+        
         # If no company name found, try to get it from the 'longName' field
         company_name = info.get('shortName', info.get('longName', 'Unknown'))
         current_price = info.get('currentPrice', info.get('regularMarketPrice', 0))
@@ -56,7 +60,8 @@ def search_stock():
             'exchange': exchange
         })
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        print(f"Error in search_stock: {str(e)}")  # Log the error
+        return jsonify({'error': f'Server error: {str(e)}'}), 500
 
 @main_bp.route('/api/mutual-fund/search', methods=['GET'])
 def search_mutual_fund():
@@ -68,7 +73,17 @@ def search_mutual_fund():
     try:
         # Call mfapi.in API to fetch mutual fund data
         response = requests.get(f'https://api.mfapi.in/mf/{scheme_code}')
-        data = response.json()
+        
+        # Check if the response was successful
+        if response.status_code != 200:
+            return jsonify({'error': f'API returned status code {response.status_code}'}), response.status_code
+        
+        # Try to parse JSON response
+        try:
+            data = response.json()
+        except ValueError as e:
+            print(f"JSON parsing error: {str(e)}, Response content: {response.text[:100]}")  # Log the error
+            return jsonify({'error': 'Invalid JSON response from external API'}), 500
         
         if 'error' in data:
             return jsonify({'error': data['error']}), 404
@@ -92,5 +107,9 @@ def search_mutual_fund():
             'fundType': fund_type,
             'fundCategory': fund_category
         })
+    except requests.exceptions.RequestException as e:
+        print(f"Request error in search_mutual_fund: {str(e)}")  # Log the error
+        return jsonify({'error': f'Failed to connect to external API: {str(e)}'}), 500
     except Exception as e:
-        return jsonify({'error': str(e)}), 500 
+        print(f"Error in search_mutual_fund: {str(e)}")  # Log the error
+        return jsonify({'error': f'Server error: {str(e)}'}), 500 
