@@ -1,0 +1,44 @@
+/* Main Styles */
+body {
+    background-color: #f8f9fa;
+    min-height: 100vh;
+}
+
+.navbar {
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.card {
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    border: none;
+    border-radius: 0.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.card-header {
+    background-color: #f8f9fa;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.125);
+    padding: 1rem 1.25rem;
+}
+
+.table th {
+    font-weight: 600;
+}
+
+.profit {
+    color: #28a745;
+}
+
+.loss {
+    color: #dc3545;
+}
+
+/* Auth-related styles */
+.auth-required {
+    display: block;
+}
+
+/* Dashboard styles */
+#portfolioSummary {
+    font-size: 1.1rem;
+} 

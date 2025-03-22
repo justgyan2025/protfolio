@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Investment Tracker{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4">Investment Dashboard</h1>
+        <div class="alert alert-info auth-required" role="alert">
+            Please log in to view your investment dashboard.
+        </div>
+        <div class="row d-none" id="dashboardContent">
+            <div class="col-md-6 mb-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Stocks Overview</h5>
+                    </div>
+                    <div class="card-body">
+                        <p>View your stock investments and track their performance.</p>
+                        <a href="{{ url_for('main.stocks') }}" class="btn btn-primary">Go to Stocks</a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6 mb-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Mutual Funds Overview</h5>
+                    </div>
+                    <div class="card-body">
+                        <p>View your mutual fund investments and track their performance.</p>
+                        <a href="{{ url_for('main.mutual_funds') }}" class="btn btn-primary">Go to Mutual Funds</a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-12 mb-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Total Portfolio Value</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="portfolioSummary">Loading portfolio data...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+{% endblock %} 
