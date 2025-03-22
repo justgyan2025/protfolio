@@ -1,8 +1,6 @@
 from flask import Blueprint, render_template, redirect, url_for, jsonify, request, current_app
 import yfinance as yf
 import requests
-import re
-import time
 
 main_bp = Blueprint('main', __name__)
 
@@ -26,58 +24,6 @@ def mutual_funds():
     firebase_config = current_app.config['FIREBASE_CONFIG']
     return render_template('mutual_funds.html', firebase_config=firebase_config)
 
-def fetch_nse_data(symbol):
-    """Fallback function to fetch stock data from NSE India website"""
-    try:
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-            "Accept-Language": "en-US,en;q=0.5",
-            "Accept-Encoding": "gzip, deflate, br",
-            "Connection": "keep-alive",
-            "Upgrade-Insecure-Requests": "1"
-        }
-
-        print(f"Trying to fetch data from NSE for {symbol}")
-        
-        # First, try to get company details
-        url = f"https://www.nseindia.com/get-quotes/equity?symbol={symbol}"
-        response = requests.get(url, headers=headers, timeout=10)
-        
-        if response.status_code != 200:
-            return None
-            
-        # Extract company name using regex (simplified)
-        company_name_match = re.search(r'<title>(.*?)\s*-\s*NSE', response.text)
-        company_name = company_name_match.group(1).strip() if company_name_match else symbol
-            
-        # Try to get price data via NSE API
-        time.sleep(1)  # Add a small delay to avoid rate limiting
-        quote_url = f"https://www.nseindia.com/api/quote-equity?symbol={symbol}"
-        price_response = requests.get(quote_url, headers=headers, timeout=10)
-            
-        if price_response.status_code == 200:
-            price_data = price_response.json()
-            current_price = price_data.get('lastPrice', 0)
-            return {
-                'symbol': symbol,
-                'companyName': company_name,
-                'currentPrice': float(str(current_price).replace(',', ''))
-            }
-        else:
-            # Fallback to regex for price extraction if API fails
-            price_match = re.search(r'data-price="([0-9,.]+)"', response.text)
-            price = price_match.group(1) if price_match else "0"
-            
-            return {
-                'symbol': symbol,
-                'companyName': company_name,
-                'currentPrice': float(str(price).replace(',', ''))
-            }
-    except Exception as e:
-        print(f"Error in NSE fallback: {str(e)}")
-        return None
-
 @main_bp.route('/api/stock/search', methods=['GET'])
 def search_stock():
     query = request.args.get('query', '')
@@ -87,104 +33,81 @@ def search_stock():
         return jsonify({'error': 'Query parameter is required'}), 400
     
     try:
-        # First, try a more direct approach like the example
-        symbol = query.upper()
-        
-        # Add suffix based on exchange
+        # Format symbol based on exchange (NSE or BSE)
         if exchange.upper() == 'NSE':
-            ticker_symbol = f"{symbol}.NS"
+            ticker_symbol = f"{query.upper()}.NS"
         elif exchange.upper() == 'BSE':
-            ticker_symbol = f"{symbol}.BO"
+            ticker_symbol = f"{query.upper()}.BO"
         else:
-            ticker_symbol = symbol
-            
-        print(f"Attempting to fetch data for ticker: {ticker_symbol}")
+            ticker_symbol = query.upper()
         
-        try:
-            # Simple direct approach first
-            stock = yf.Ticker(ticker_symbol)
-            info = stock.info
-            
-            # Check if we got valid price data
-            if info and ('regularMarketPrice' in info or 'currentPrice' in info):
-                company_name = info.get('longName', info.get('shortName', 'Unknown'))
-                current_price = info.get('regularMarketPrice', info.get('currentPrice', 0))
-                
-                return jsonify({
-                    'symbol': symbol,
-                    'companyName': company_name,
-                    'currentPrice': current_price,
-                    'exchange': exchange,
-                    'source': 'Yahoo Finance'
-                })
-        except Exception as e:
-            print(f"Yahoo Finance direct approach failed: {str(e)}")
-            # Continue to fallback approaches
+        # Get the stock information
+        ticker = yf.Ticker(ticker_symbol)
+        info = ticker.info
         
-        # If Yahoo Finance failed, try our fallback for Indian stocks
-        if exchange.upper() in ['NSE', 'BSE']:
-            # First, try with a static data approach for common Indian stocks
-            common_stocks = {
-                'TCS': {'name': 'Tata Consultancy Services Ltd.', 'price': 3800.50},
-                'INFY': {'name': 'Infosys Ltd.', 'price': 1680.75},
-                'RELIANCE': {'name': 'Reliance Industries Ltd.', 'price': 2850.25},
-                'HDFCBANK': {'name': 'HDFC Bank Ltd.', 'price': 1695.30},
-                'ICICIBANK': {'name': 'ICICI Bank Ltd.', 'price': 1245.60},
-                'WIPRO': {'name': 'Wipro Ltd.', 'price': 480.15},
-                'HCLTECH': {'name': 'HCL Technologies Ltd.', 'price': 1520.45},
-                'ADANIENT': {'name': 'Adani Enterprises Ltd.', 'price': 2980.30},
-                'BAJFINANCE': {'name': 'Bajaj Finance Ltd.', 'price': 7250.80},
-                'TATAMOTORS': {'name': 'Tata Motors Ltd.', 'price': 860.25},
-            }
-            
-            # If we have static data for this symbol, use it
-            if symbol in common_stocks:
-                print(f"Using static data for {symbol}")
-                return jsonify({
-                    'symbol': symbol,
-                    'companyName': common_stocks[symbol]['name'],
-                    'currentPrice': common_stocks[symbol]['price'],
-                    'exchange': exchange,
-                    'source': 'Static Data'
-                })
-                
-            # Otherwise try the NSE fallback
-            print(f"Trying NSE fallback for {symbol}")
-            nse_data = fetch_nse_data(symbol)
-            if nse_data:
-                print(f"NSE fallback successful: {nse_data}")
-                return jsonify({
-                    'symbol': nse_data['symbol'],
-                    'companyName': nse_data['companyName'],
-                    'currentPrice': nse_data['currentPrice'],
-                    'exchange': exchange,
-                    'source': 'NSE Fallback'
-                })
+        # Check if we got valid info back
+        if not info or len(info) == 0 or 'regularMarketPrice' not in info:
+            return jsonify({'error': f'No data found for symbol {ticker_symbol}'}), 404
         
-        # If we reach here, all methods failed
-        print(f"All methods failed for {ticker_symbol}")
+        # If no company name found, try to get it from the 'longName' field
+        company_name = info.get('shortName', info.get('longName', 'Unknown'))
+        current_price = info.get('regularMarketPrice', 0)
         
-        # Return a placeholder response rather than an error to avoid the JSON parsing error
         return jsonify({
-            'symbol': symbol,
-            'companyName': f"{symbol} - Company Name Unavailable",
-            'currentPrice': 0,
+            'symbol': query.upper(),
+            'companyName': company_name,
+            'currentPrice': current_price,
             'exchange': exchange,
-            'source': 'Placeholder',
-            'warning': 'Unable to fetch real data, showing placeholder'
+            'dayHigh': info.get('dayHigh', 0),
+            'dayLow': info.get('dayLow', 0),
+            'previousClose': info.get('previousClose', 0)
         })
     except Exception as e:
         print(f"Error in search_stock: {str(e)}")  # Log the error
+        return jsonify({'error': f'Server error: {str(e)}'}), 500
+
+@main_bp.route('/api/get_stock_info', methods=['GET'])
+def get_stock_info():
+    try:
+        symbol = request.args.get('symbol', '')
+        exchange = request.args.get('exchange', 'NSE')  # Default to NSE
         
-        # Even in the case of an exception, return a valid JSON response
+        # Format symbol based on exchange (NSE or BSE)
+        if exchange.upper() == 'NSE':
+            if not symbol.endswith('.NS'):
+                ticker_symbol = f"{symbol.upper()}.NS"
+            else:
+                ticker_symbol = symbol.upper()
+        elif exchange.upper() == 'BSE':
+            if not symbol.endswith('.BO'):
+                ticker_symbol = f"{symbol.upper()}.BO"
+            else:
+                ticker_symbol = symbol.upper()
+        else:
+            ticker_symbol = symbol.upper()
+        
+        stock = yf.Ticker(ticker_symbol)
+        info = stock.info
+        
+        if 'regularMarketPrice' not in info:
+            return jsonify({
+                'error': 'Stock not found or not available'
+            }), 404
+            
         return jsonify({
-            'symbol': query.upper(),
-            'companyName': f"{query.upper()} - Data Unavailable",
-            'currentPrice': 0,
-            'exchange': exchange,
-            'source': 'Error Fallback',
-            'warning': 'An error occurred while fetching data'
+            'name': info.get('longName', info.get('shortName', '')),
+            'symbol': symbol.upper(),
+            'currentPrice': info.get('regularMarketPrice', 0),
+            'dayHigh': info.get('dayHigh', 0),
+            'dayLow': info.get('dayLow', 0),
+            'previousClose': info.get('previousClose', 0),
+            'exchange': exchange
         })
+    except Exception as e:
+        print(f"Error in get_stock_info: {str(e)}")  # Log the error
+        return jsonify({
+            'error': str(e)
+        }), 500
 
 @main_bp.route('/api/mutual-fund/search', methods=['GET'])
 def search_mutual_fund():

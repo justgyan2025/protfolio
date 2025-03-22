@@ -130,29 +130,15 @@ function setupStockSearch() {
         searchBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Searching...';
         showStockInfoAlert('Searching for stock information...', 'info');
         
-        // Set a timeout to handle very slow responses
-        const timeoutId = setTimeout(() => {
-            if (searchBtn.disabled) {
-                searchBtn.disabled = false;
-                searchBtn.textContent = 'Search';
-                showStockInfoAlert('Search request timed out. The server may be experiencing issues.', 'warning');
-            }
-        }, 30000); // 30 second timeout
+        // Hide additional stock info section
+        const additionalStockInfo = document.getElementById('additionalStockInfo');
+        if (additionalStockInfo) {
+            additionalStockInfo.classList.add('d-none');
+        }
         
-        // Call the API to get stock information
-        fetch(`/api/stock/search?query=${encodeURIComponent(symbol)}&exchange=${exchange}`, {
-            method: 'GET',
-            headers: {
-                'Accept': 'application/json',
-                'Cache-Control': 'no-cache'
-            },
-            // Add a shorter fetch timeout
-            signal: AbortSignal.timeout(20000)
-        })
+        // Call the API to get stock information using the new endpoint
+        fetch(`/api/get_stock_info?symbol=${encodeURIComponent(symbol)}&exchange=${exchange}`)
             .then(response => {
-                // Clear the timeout since we got a response
-                clearTimeout(timeoutId);
-                
                 if (!response.ok) {
                     if (response.status === 500) {
                         throw new Error('Server error. Please try again later.');
@@ -175,48 +161,53 @@ function setupStockSearch() {
                 searchBtn.disabled = false;
                 searchBtn.textContent = 'Search';
                 
-                // If there's a traditional error message
                 if (data.error) {
                     showStockInfoAlert(`Error: ${data.error}`, 'danger');
                     return;
                 }
                 
                 // Fill in the company name and current price
-                companyNameInput.value = data.companyName || symbol;
-                currentPriceInput.value = data.currentPrice || 0;
+                companyNameInput.value = data.name;
+                currentPriceInput.value = data.currentPrice;
                 
-                // Check if we got a warning (placeholder or fallback data)
-                if (data.warning) {
-                    const sourceInfo = data.source ? ` (Source: ${data.source})` : '';
-                    showStockInfoAlert(`Warning: ${data.warning}${sourceInfo}`, 'warning');
-                    return;
+                // Show additional stock information if available
+                let infoMessage = `Successfully found ${data.name} (${data.symbol}) with current price ₹${data.currentPrice}`;
+                
+                // Update the additional stock info section
+                if (additionalStockInfo && (data.dayHigh || data.dayLow || data.previousClose)) {
+                    // Show the section
+                    additionalStockInfo.classList.remove('d-none');
+                    
+                    // Update values
+                    const dayHighEl = document.getElementById('dayHigh');
+                    const dayLowEl = document.getElementById('dayLow');
+                    const previousCloseEl = document.getElementById('previousClose');
+                    
+                    if (dayHighEl) dayHighEl.textContent = data.dayHigh ? `₹${data.dayHigh.toFixed(2)}` : '-';
+                    if (dayLowEl) dayLowEl.textContent = data.dayLow ? `₹${data.dayLow.toFixed(2)}` : '-';
+                    if (previousCloseEl) previousCloseEl.textContent = data.previousClose ? `₹${data.previousClose.toFixed(2)}` : '-';
+                    
+                    // Add summary to message
+                    if (data.dayHigh && data.dayLow && data.previousClose) {
+                        infoMessage += `<br>Day Range: ₹${data.dayLow.toFixed(2)} - ₹${data.dayHigh.toFixed(2)} | Previous Close: ₹${data.previousClose.toFixed(2)}`;
+                    }
                 }
                 
-                // Show success message with source info if available
-                const sourceInfo = data.source ? ` (Source: ${data.source})` : '';
-                showStockInfoAlert(`Successfully found ${data.companyName} (${data.symbol}) with current price ₹${data.currentPrice}${sourceInfo}`, 'success');
+                // Show success message
+                showStockInfoAlert(infoMessage, 'success');
             })
             .catch(error => {
-                // Clear the timeout if we catch an error
-                clearTimeout(timeoutId);
-                
                 searchBtn.disabled = false;
                 searchBtn.textContent = 'Search';
                 console.error('Error searching for stock:', error);
-                
-                // Handle AbortError (timeout) specifically
-                if (error.name === 'AbortError') {
-                    showStockInfoAlert('Search request timed out. The server may be experiencing issues.', 'warning');
-                    return;
-                }
-                
                 showStockInfoAlert(`Error: ${error.message}`, 'danger');
             });
     }
     
     // Helper function to show alert messages
     function showStockInfoAlert(message, type) {
-        stockInfoAlert.textContent = message;
+        stockInfoAlert.textContent = '';
+        stockInfoAlert.innerHTML = message;
         stockInfoAlert.className = `alert alert-${type}`;
         stockInfoAlert.classList.remove('d-none');
         
@@ -224,43 +215,16 @@ function setupStockSearch() {
         if (type === 'success') {
             setTimeout(() => {
                 stockInfoAlert.classList.add('d-none');
-            }, 5000);
+            }, 7000);
         }
     }
 }
 
 // Refresh stock price
 function refreshStockPrice(userId, stockId, symbol, exchange) {
-    // Show a loading indicator
-    const refreshButton = document.querySelector(`.refresh-price[data-stock-id="${stockId}"]`);
-    if (refreshButton) {
-        refreshButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
-        refreshButton.disabled = true;
-    }
-
-    // Set a timeout to handle very slow responses
-    const timeoutId = setTimeout(() => {
-        if (refreshButton && refreshButton.disabled) {
-            refreshButton.innerHTML = '<i class="bi bi-arrow-clockwise"></i>';
-            refreshButton.disabled = false;
-            alert('Request timed out. The server may be experiencing issues.');
-        }
-    }, 30000); // 30 second timeout
-
-    // Call the API to get updated stock price
-    fetch(`/api/stock/search?query=${encodeURIComponent(symbol)}&exchange=${exchange}`, {
-        method: 'GET',
-        headers: {
-            'Accept': 'application/json',
-            'Cache-Control': 'no-cache'
-        },
-        // Add a shorter fetch timeout
-        signal: AbortSignal.timeout(20000)
-    })
+    // Call the API to get updated stock price using the new endpoint
+    fetch(`/api/get_stock_info?symbol=${encodeURIComponent(symbol)}&exchange=${exchange}`)
         .then(response => {
-            // Clear the timeout since we got a response
-            clearTimeout(timeoutId);
-            
             if (!response.ok) {
                 if (response.status === 500) {
                     throw new Error('Server error. Please try again later.');
@@ -279,48 +243,18 @@ function refreshStockPrice(userId, stockId, symbol, exchange) {
             return response.json();
         })
         .then(data => {
-            if (refreshButton) {
-                refreshButton.innerHTML = '<i class="bi bi-arrow-clockwise"></i>';
-                refreshButton.disabled = false;
-            }
-
-            // If there's a traditional error message
             if (data.error) {
                 console.error('Error refreshing stock price:', data.error);
                 alert(`Error refreshing stock price: ${data.error}`);
                 return;
             }
             
-            // Make sure we have a valid price
-            const price = parseFloat(data.currentPrice);
-            if (isNaN(price)) {
-                console.error('Invalid price received:', data.currentPrice);
-                alert('Received invalid price data. Please try again.');
-                return;
-            }
-            
-            // Check if this is placeholder data and confirm with user
-            if (data.warning && price === 0) {
-                const proceed = confirm(`${data.warning}. Do you still want to update with this placeholder data?`);
-                if (!proceed) {
-                    return;
-                }
-            }
-            
             // Update the stock price in Firestore
             db.collection('users').doc(userId).collection('stocks').doc(stockId).update({
-                currentPrice: price,
-                lastUpdated: firebase.firestore.FieldValue.serverTimestamp(),
-                companyName: data.companyName || symbol // Also update company name if available
+                currentPrice: data.currentPrice,
+                lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
             })
             .then(() => {
-                // Show success message
-                const sourceInfo = data.source ? ` (Source: ${data.source})` : '';
-                const warningInfo = data.warning ? ` (Warning: ${data.warning})` : '';
-                const message = `Updated ${data.companyName || symbol} price to ₹${price.toFixed(2)}${sourceInfo}${warningInfo}`;
-                
-                alert(message);
-                
                 // Reload stocks data
                 loadStocksData(userId);
             })
@@ -330,22 +264,7 @@ function refreshStockPrice(userId, stockId, symbol, exchange) {
             });
         })
         .catch(error => {
-            // Clear the timeout if we catch an error
-            clearTimeout(timeoutId);
-            
-            if (refreshButton) {
-                refreshButton.innerHTML = '<i class="bi bi-arrow-clockwise"></i>';
-                refreshButton.disabled = false;
-            }
-            
             console.error('Error refreshing stock price:', error);
-            
-            // Handle AbortError (timeout) specifically
-            if (error.name === 'AbortError') {
-                alert('Search request timed out. The server may be experiencing issues.');
-                return;
-            }
-            
             alert(`Error refreshing stock price: ${error.message}`);
         });
 }

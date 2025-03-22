@@ -96,6 +96,35 @@
                         </div>
                         <div class="form-text">Current price will be fetched automatically when you search for a stock.</div>
                     </div>
+                    <div class="mb-3 d-none" id="additionalStockInfo">
+                        <div class="card">
+                            <div class="card-header">
+                                <h6 class="mb-0">Additional Stock Information</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-4">
+                                        <div class="mb-2">
+                                            <small class="text-muted">Day High</small>
+                                            <div id="dayHigh">-</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="mb-2">
+                                            <small class="text-muted">Day Low</small>
+                                            <div id="dayLow">-</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="mb-2">
+                                            <small class="text-muted">Previous Close</small>
+                                            <div id="previousClose">-</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                     <div class="alert alert-info d-none" id="stockInfoAlert"></div>
                     <div class="alert alert-danger d-none" id="addStockError"></div>
                 </div>
