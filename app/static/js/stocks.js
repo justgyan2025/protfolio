@@ -142,6 +142,8 @@ function setupStockSearch() {
                 if (!response.ok) {
                     if (response.status === 500) {
                         throw new Error('Server error. Please try again later.');
+                    } else if (response.status === 504) {
+                        throw new Error('The request timed out. The stock data service is currently slow or unavailable. Please try again later.');
                     } else if (response.status === 404) {
                         throw new Error(`Stock symbol ${symbol} not found on ${exchange}.`);
                     } else {
@@ -228,6 +230,8 @@ function refreshStockPrice(userId, stockId, symbol, exchange) {
             if (!response.ok) {
                 if (response.status === 500) {
                     throw new Error('Server error. Please try again later.');
+                } else if (response.status === 504) {
+                    throw new Error('The request timed out. The stock data service is currently slow or unavailable. Please try again later.');
                 } else if (response.status === 404) {
                     throw new Error(`Stock symbol ${symbol} not found on ${exchange}.`);
                 } else {

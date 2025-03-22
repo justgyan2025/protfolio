@@ -1,6 +1,8 @@
 from flask import Blueprint, render_template, redirect, url_for, jsonify, request, current_app
 import yfinance as yf
 import requests
+import concurrent.futures
+import time
 
 main_bp = Blueprint('main', __name__)
 
@@ -43,7 +45,21 @@ def search_stock():
         
         # Get the stock information
         ticker = yf.Ticker(ticker_symbol)
-        info = ticker.info
+        
+        # Use a timeout when getting info
+        def get_stock_info_with_timeout():
+            return ticker.info
+        
+        # Set a timeout of 5 seconds
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            future = executor.submit(get_stock_info_with_timeout)
+            try:
+                info = future.result(timeout=5)
+            except concurrent.futures.TimeoutError:
+                print(f"Timeout getting info for {ticker_symbol}")
+                return jsonify({
+                    'error': 'Request timed out. The stock data service is not responding.'
+                }), 504
         
         # Check if we got valid info back
         if not info or len(info) == 0 or 'regularMarketPrice' not in info:
@@ -86,8 +102,23 @@ def get_stock_info():
         else:
             ticker_symbol = symbol.upper()
         
+        # Create Ticker with timeout to prevent hanging
         stock = yf.Ticker(ticker_symbol)
-        info = stock.info
+        
+        # Use a timeout when getting info
+        def get_stock_info_with_timeout():
+            return stock.info
+        
+        # Set a timeout of 5 seconds
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            future = executor.submit(get_stock_info_with_timeout)
+            try:
+                info = future.result(timeout=5)
+            except concurrent.futures.TimeoutError:
+                print(f"Timeout getting info for {ticker_symbol}")
+                return jsonify({
+                    'error': 'Request timed out. The stock data service is not responding.'
+                }), 504
         
         if 'regularMarketPrice' not in info:
             return jsonify({
