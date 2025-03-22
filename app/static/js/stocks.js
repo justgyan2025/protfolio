@@ -130,9 +130,29 @@ function setupStockSearch() {
         searchBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Searching...';
         showStockInfoAlert('Searching for stock information...', 'info');
         
+        // Set a timeout to handle very slow responses
+        const timeoutId = setTimeout(() => {
+            if (searchBtn.disabled) {
+                searchBtn.disabled = false;
+                searchBtn.textContent = 'Search';
+                showStockInfoAlert('Search request timed out. The server may be experiencing issues.', 'warning');
+            }
+        }, 30000); // 30 second timeout
+        
         // Call the API to get stock information
-        fetch(`/api/stock/search?query=${encodeURIComponent(symbol)}&exchange=${exchange}`)
+        fetch(`/api/stock/search?query=${encodeURIComponent(symbol)}&exchange=${exchange}`, {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json',
+                'Cache-Control': 'no-cache'
+            },
+            // Add a shorter fetch timeout
+            signal: AbortSignal.timeout(20000)
+        })
             .then(response => {
+                // Clear the timeout since we got a response
+                clearTimeout(timeoutId);
+                
                 if (!response.ok) {
                     if (response.status === 500) {
                         throw new Error('Server error. Please try again later.');
@@ -164,13 +184,24 @@ function setupStockSearch() {
                 companyNameInput.value = data.companyName;
                 currentPriceInput.value = data.currentPrice;
                 
-                // Show success message
-                showStockInfoAlert(`Successfully found ${data.companyName} (${data.symbol}) with current price ₹${data.currentPrice}`, 'success');
+                // Show success message with source info if available
+                const sourceInfo = data.source ? ` (Source: ${data.source})` : '';
+                showStockInfoAlert(`Successfully found ${data.companyName} (${data.symbol}) with current price ₹${data.currentPrice}${sourceInfo}`, 'success');
             })
             .catch(error => {
+                // Clear the timeout if we catch an error
+                clearTimeout(timeoutId);
+                
                 searchBtn.disabled = false;
                 searchBtn.textContent = 'Search';
                 console.error('Error searching for stock:', error);
+                
+                // Handle AbortError (timeout) specifically
+                if (error.name === 'AbortError') {
+                    showStockInfoAlert('Search request timed out. The server may be experiencing issues.', 'warning');
+                    return;
+                }
+                
                 showStockInfoAlert(`Error: ${error.message}`, 'danger');
             });
     }
