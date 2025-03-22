@@ -175,14 +175,22 @@ function setupStockSearch() {
                 searchBtn.disabled = false;
                 searchBtn.textContent = 'Search';
                 
+                // If there's a traditional error message
                 if (data.error) {
                     showStockInfoAlert(`Error: ${data.error}`, 'danger');
                     return;
                 }
                 
                 // Fill in the company name and current price
-                companyNameInput.value = data.companyName;
-                currentPriceInput.value = data.currentPrice;
+                companyNameInput.value = data.companyName || symbol;
+                currentPriceInput.value = data.currentPrice || 0;
+                
+                // Check if we got a warning (placeholder or fallback data)
+                if (data.warning) {
+                    const sourceInfo = data.source ? ` (Source: ${data.source})` : '';
+                    showStockInfoAlert(`Warning: ${data.warning}${sourceInfo}`, 'warning');
+                    return;
+                }
                 
                 // Show success message with source info if available
                 const sourceInfo = data.source ? ` (Source: ${data.source})` : '';
@@ -223,9 +231,36 @@ function setupStockSearch() {
 
 // Refresh stock price
 function refreshStockPrice(userId, stockId, symbol, exchange) {
+    // Show a loading indicator
+    const refreshButton = document.querySelector(`.refresh-price[data-stock-id="${stockId}"]`);
+    if (refreshButton) {
+        refreshButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
+        refreshButton.disabled = true;
+    }
+
+    // Set a timeout to handle very slow responses
+    const timeoutId = setTimeout(() => {
+        if (refreshButton && refreshButton.disabled) {
+            refreshButton.innerHTML = '<i class="bi bi-arrow-clockwise"></i>';
+            refreshButton.disabled = false;
+            alert('Request timed out. The server may be experiencing issues.');
+        }
+    }, 30000); // 30 second timeout
+
     // Call the API to get updated stock price
-    fetch(`/api/stock/search?query=${encodeURIComponent(symbol)}&exchange=${exchange}`)
+    fetch(`/api/stock/search?query=${encodeURIComponent(symbol)}&exchange=${exchange}`, {
+        method: 'GET',
+        headers: {
+            'Accept': 'application/json',
+            'Cache-Control': 'no-cache'
+        },
+        // Add a shorter fetch timeout
+        signal: AbortSignal.timeout(20000)
+    })
         .then(response => {
+            // Clear the timeout since we got a response
+            clearTimeout(timeoutId);
+            
             if (!response.ok) {
                 if (response.status === 500) {
                     throw new Error('Server error. Please try again later.');
@@ -244,18 +279,48 @@ function refreshStockPrice(userId, stockId, symbol, exchange) {
             return response.json();
         })
         .then(data => {
+            if (refreshButton) {
+                refreshButton.innerHTML = '<i class="bi bi-arrow-clockwise"></i>';
+                refreshButton.disabled = false;
+            }
+
+            // If there's a traditional error message
             if (data.error) {
                 console.error('Error refreshing stock price:', data.error);
                 alert(`Error refreshing stock price: ${data.error}`);
                 return;
             }
             
+            // Make sure we have a valid price
+            const price = parseFloat(data.currentPrice);
+            if (isNaN(price)) {
+                console.error('Invalid price received:', data.currentPrice);
+                alert('Received invalid price data. Please try again.');
+                return;
+            }
+            
+            // Check if this is placeholder data and confirm with user
+            if (data.warning && price === 0) {
+                const proceed = confirm(`${data.warning}. Do you still want to update with this placeholder data?`);
+                if (!proceed) {
+                    return;
+                }
+            }
+            
             // Update the stock price in Firestore
             db.collection('users').doc(userId).collection('stocks').doc(stockId).update({
-                currentPrice: data.currentPrice,
-                lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
+                currentPrice: price,
+                lastUpdated: firebase.firestore.FieldValue.serverTimestamp(),
+                companyName: data.companyName || symbol // Also update company name if available
             })
             .then(() => {
+                // Show success message
+                const sourceInfo = data.source ? ` (Source: ${data.source})` : '';
+                const warningInfo = data.warning ? ` (Warning: ${data.warning})` : '';
+                const message = `Updated ${data.companyName || symbol} price to ₹${price.toFixed(2)}${sourceInfo}${warningInfo}`;
+                
+                alert(message);
+                
                 // Reload stocks data
                 loadStocksData(userId);
             })
@@ -265,7 +330,22 @@ function refreshStockPrice(userId, stockId, symbol, exchange) {
             });
         })
         .catch(error => {
+            // Clear the timeout if we catch an error
+            clearTimeout(timeoutId);
+            
+            if (refreshButton) {
+                refreshButton.innerHTML = '<i class="bi bi-arrow-clockwise"></i>';
+                refreshButton.disabled = false;
+            }
+            
             console.error('Error refreshing stock price:', error);
+            
+            // Handle AbortError (timeout) specifically
+            if (error.name === 'AbortError') {
+                alert('Search request timed out. The server may be experiencing issues.');
+                return;
+            }
+            
             alert(`Error refreshing stock price: ${error.message}`);
         });
 }
